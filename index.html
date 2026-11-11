@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiro: one agent at the center of your engineering</title>
+<style>
+  :root{
+    --bg:#07040f;
+    --ink:#f4f1ff;
+    --muted:#a99fc4;
+    --line:rgba(255,255,255,.08);
+    --kiro:#9b5cff;
+    --kiro2:#c08bff;
+    --c-build:#a78bfa;   /* vibe + spec */
+    --c-collab:#38bdf8;  /* slack/email */
+    --c-data:#34d399;    /* data */
+    --c-iac:#fbbf24;     /* IaC + cloud */
+    --c-model:#f472b6;   /* models */
+    --c-run:#22d3ee;     /* interfaces */
+    --c-sec:#7dd3fc;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);overflow:hidden}
+  body{font-family:"Inter","SF Pro Display",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+
+  /* Fixed 1920x1080 stage, scaled to fit any window (fullscreen, projector, zoom) */
+  #stage{
+    position:absolute;left:50%;top:50%;width:1920px;height:1080px;
+    transform-origin:center center;overflow:hidden;
+    background:
+      radial-gradient(700px 500px at 8% 10%, rgba(56,189,248,.10), transparent 70%),
+      radial-gradient(700px 500px at 95% 95%, rgba(244,114,182,.10), transparent 70%),
+      radial-gradient(rgba(255,255,255,.06) 1px, transparent 1.4px) 0 0/32px 32px,
+      var(--bg);
+  }
+
+  /* ---------- slides + navigation ---------- */
+  .slide{position:absolute;inset:0;opacity:0;visibility:hidden;transition:opacity .35s ease,visibility 0s .35s}
+  .slide.active{opacity:1;visibility:visible;transition:opacity .35s ease}
+  #s-overview{background:radial-gradient(900px 600px at 50% 52%, rgba(155,92,255,.22), transparent 70%)}
+  .detail{background:radial-gradient(1000px 700px at 78% 40%, color-mix(in srgb,var(--c) 16%,transparent), transparent 70%)}
+
+  #nav{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:20}
+  #nav a{font-size:14px;font-weight:600;padding:6px 13px;border-radius:999px;color:#cfc6ea;text-decoration:none;
+    border:1px solid rgba(255,255,255,.10);background:rgba(18,10,36,.72);display:flex;align-items:center;gap:7px;transition:background .2s,border-color .2s,color .2s}
+  #nav a i{width:7px;height:7px;border-radius:50%;background:var(--c)}
+  #nav a:hover{color:#fff;border-color:color-mix(in srgb,var(--c) 60%,transparent)}
+  #nav a.on{color:#fff;border-color:var(--c);background:color-mix(in srgb,var(--c) 24%,#120a24)}
+
+  #pager{position:absolute;right:60px;bottom:10px;display:flex;align-items:center;gap:10px;z-index:20;font-size:13px;color:#7d7398}
+  #pager button{width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(18,10,36,.72);color:#e9e3ff;font-size:16px;cursor:pointer;line-height:1}
+  #pager button:hover{border-color:var(--kiro2)}
+
+  /* ---------- overview header ---------- */
+  header{position:absolute;left:60px;top:44px;right:60px;display:flex;justify-content:space-between;align-items:flex-start}
+  .eyebrow{font-size:17px;letter-spacing:.32em;text-transform:uppercase;color:var(--kiro2);font-weight:600}
+  h1{font-size:54px;line-height:1.08;font-weight:750;letter-spacing:-.02em;margin-top:10px}
+  h1 .grad{background:linear-gradient(90deg,#c9a6ff,#7dd3fc 60%,#f9a8d4);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{font-size:23px;color:var(--muted);margin-top:10px}
+  .badges{display:flex;gap:10px;margin-top:8px}
+  .badge{font-size:16px;font-weight:600;padding:9px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#e9e3ff;backdrop-filter:blur(6px)}
+  .badge i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px}
+
+  /* ---------- connection layer ---------- */
+  svg#wires{position:absolute;inset:0;width:1920px;height:1080px;pointer-events:none}
+  .wire{fill:none;stroke-width:2.4;stroke-linecap:round;opacity:.85;stroke-dasharray:6 9;animation:flow 1.6s linear infinite}
+  .wire-glow{fill:none;stroke-width:10;opacity:.10;stroke-linecap:round}
+  @keyframes flow{to{stroke-dashoffset:-30}}
+  .pill rect{fill:#120a24;stroke-width:1.4}
+  .pill text{font-size:14px;font-weight:700;letter-spacing:.12em;text-anchor:middle;dominant-baseline:central}
+  .orbit{transform-origin:960px 560px;transform-box:view-box;animation:spin 60s linear infinite}
+  .orbit text{font-size:14px;font-weight:700;letter-spacing:.2em;fill:#cbb6ff;opacity:.85}
+  .halo{transform-origin:960px 560px;transform-box:view-box;animation:pulse 3.2s ease-in-out infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes pulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:.75;transform:scale(1.06)}}
+
+  /* ---------- hub ---------- */
+  .hub{position:absolute;left:830px;top:430px;width:260px;height:260px;border-radius:50%;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    background:radial-gradient(circle at 35% 30%, #b98bff 0%, #7c3aed 45%, #3b0f8c 100%);
+    box-shadow:0 0 0 1px rgba(255,255,255,.25) inset, 0 0 60px rgba(155,92,255,.65), 0 0 140px rgba(155,92,255,.35)}
+  .hub svg{width:78px;height:78px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
+  .hub .name{font-size:46px;font-weight:800;letter-spacing:-.01em;margin-top:4px}
+  .hub .tag{font-size:15px;letter-spacing:.18em;text-transform:uppercase;opacity:.85;margin-top:2px}
+
+  /* ---------- capability cards ---------- */
+  .card{position:absolute;width:400px;height:236px;padding:22px 24px;border-radius:22px;
+    background:linear-gradient(160deg, rgba(255,255,255,.075), rgba(255,255,255,.02));
+    border:1px solid rgba(255,255,255,.10);backdrop-filter:blur(10px);
+    box-shadow:0 20px 50px rgba(0,0,0,.35);
+    opacity:0;animation:rise .7s cubic-bezier(.2,.8,.2,1) forwards}
+  .card::before{content:"";position:absolute;inset:0;border-radius:22px;padding:1px;
+    background:linear-gradient(140deg,var(--c),transparent 55%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:.7}
+  .card .top{display:flex;align-items:center;gap:14px}
+  .ico{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;flex:none;
+    background:color-mix(in srgb,var(--c) 18%,transparent);border:1px solid color-mix(in srgb,var(--c) 45%,transparent)}
+  .ico svg{width:26px;height:26px;stroke:var(--c);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .card h3{font-size:25px;font-weight:700;letter-spacing:-.01em;line-height:1.1}
+  .card h3 small{display:block;font-size:14px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--c);margin-bottom:3px}
+  .card p{font-size:17px;color:var(--muted);margin:12px 0 12px;line-height:1.35}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-size:16px;font-weight:550;padding:6px 12px;border-radius:999px;color:#efeaff;
+    background:color-mix(in srgb,var(--c) 12%,rgba(255,255,255,.03));border:1px solid color-mix(in srgb,var(--c) 32%,transparent)}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  [data-go]{cursor:pointer;transition:translate .2s ease,box-shadow .2s ease}
+  [data-go]:hover{translate:0 -4px;box-shadow:0 24px 60px rgba(0,0,0,.45),0 0 0 1px color-mix(in srgb,var(--c,#7dd3fc) 55%,transparent)}
+  .card .go{position:absolute;right:20px;top:20px;font-size:20px;color:var(--c);opacity:.55}
+  [data-go]:hover .go{opacity:1}
+
+  .l{left:60px}.r{left:1460px}
+  .t{top:172px}.m{top:432px}.b{top:692px}
+
+  /* ---------- security band ---------- */
+  .sec{position:absolute;left:520px;top:858px;width:880px;height:178px;padding:18px 22px;border-radius:22px;
+    background:linear-gradient(180deg, rgba(125,211,252,.10), rgba(155,92,255,.08));
+    border:1px solid rgba(125,211,252,.28);box-shadow:0 0 50px rgba(125,211,252,.10);
+    opacity:0;animation:rise .7s .9s cubic-bezier(.2,.8,.2,1) forwards}
+  .sec .head{display:flex;align-items:center;gap:12px;font-size:21px;font-weight:700;margin-bottom:12px}
+  .sec .head svg{width:26px;height:26px;stroke:var(--c-sec);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .sec .head span{font-size:15px;font-weight:600;color:var(--muted);margin-left:auto}
+  .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .g{padding:7px 11px;border-radius:12px;background:rgba(7,4,15,.55);border:1px solid rgba(255,255,255,.08)}
+  .g b{display:block;font-size:15.5px;font-weight:700;color:#e6f6ff}
+  .g em{display:block;font-style:normal;font-size:13.5px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  footer{position:absolute;left:60px;right:200px;bottom:16px;display:flex;justify-content:space-between;font-size:13px;color:#7d7398}
+
+  /* ---------- detail pages ---------- */
+  .dh{position:absolute;left:60px;top:66px;right:60px}
+  .dh .eyebrow{color:var(--c)}
+  .dh h1{font-size:50px}
+  .dh .sub{font-size:22px}
+  .dh .pg{position:absolute;right:0;top:2px;font-size:15px;font-weight:600;color:var(--muted);letter-spacing:.12em}
+  .dh .back{display:inline-block;margin-left:14px;font-size:13px;letter-spacing:.14em;text-decoration:none;color:var(--muted);border-bottom:1px dashed rgba(255,255,255,.25);cursor:pointer}
+
+  .db{position:absolute;left:60px;top:226px;width:1800px;height:684px;display:grid;grid-template-columns:880px 1fr;gap:36px}
+  .col{display:flex;flex-direction:column;gap:18px;min-height:0}
+  .lead{font-size:21px;line-height:1.45;color:#e4ddfb}
+  .lead b{color:#fff}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .tile{padding:17px 20px;border-radius:18px;background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.10);position:relative}
+  .tile::before{content:"";position:absolute;left:0;top:18px;bottom:18px;width:3px;border-radius:3px;background:var(--c)}
+  .tile h5{font-size:20px;font-weight:700;margin-bottom:6px}
+  .tile p{font-size:16.5px;line-height:1.38;color:var(--muted)}
+  .tile code,.lead code,.q code,.node code,.cav code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.88em;color:#efeaff;background:rgba(255,255,255,.07);padding:1px 6px;border-radius:6px;white-space:nowrap}
+  .try{padding:16px 20px;border-radius:18px;background:rgba(7,4,15,.55);border:1px dashed color-mix(in srgb,var(--c) 45%,transparent)}
+  .try h4,.vis h4,.avail h4{font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--c);font-weight:700;margin-bottom:10px}
+  .q{font-size:17.5px;line-height:1.4;color:#efeaff;padding:8px 0 8px 30px;position:relative}
+  .q::before{content:"›";position:absolute;left:6px;top:4px;font-size:24px;color:var(--c);font-weight:700}
+  .q + .q{border-top:1px solid rgba(255,255,255,.06)}
+
+  .vis{position:relative;border-radius:22px;padding:20px 26px;height:410px;
+    background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.10)}
+  .avail{border-radius:22px;padding:18px 26px 14px;background:rgba(7,4,15,.5);border:1px solid rgba(255,255,255,.08)}
+  .avail table{width:100%;border-collapse:collapse;font-size:16.5px}
+  .avail th{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;text-align:center;padding:4px 0 8px}
+  .avail th:first-child,.avail td:first-child{text-align:left;width:44%}
+  .avail td{padding:8px 0;border-top:1px solid rgba(255,255,255,.06);text-align:center;font-weight:600}
+  .avail td.y{color:#6ee7b7;font-size:19px}
+  .avail td.n{color:#5f567a}
+  .avail td.u{color:#8a80a8}
+  .avail td.p{color:#fcd34d;font-size:14px}
+  .legend{font-size:12.5px;color:#7d7398;margin-top:6px}
+
+  .note{position:absolute;left:60px;top:930px;width:1800px;display:flex;gap:28px;align-items:flex-start}
+  .cav{flex:1;font-size:15.5px;line-height:1.45;color:var(--muted);padding:12px 18px 12px 46px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);position:relative}
+  .cav::before{content:"i";position:absolute;left:16px;top:13px;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--c);color:var(--c);font-size:12px;font-weight:800;display:grid;place-items:center;font-style:italic}
+  .links{flex:none;display:flex;flex-direction:column;gap:6px;width:340px}
+  .links span{font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .links a{font-size:15px;color:#e9e3ff;text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--c) 45%,transparent);align-self:flex-start}
+  .links a:hover{color:var(--c)}
+  .links a::after{content:" ↗";color:var(--c)}
+
+  /* entry animation for detail content */
+  .slide.active .an{animation:rise .6s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0s)}
+
+  /* ---------- visual building blocks ---------- */
+  .node{padding:9px 13px;border-radius:12px;background:rgba(7,4,15,.65);border:1px solid color-mix(in srgb,var(--c) 42%,transparent);font-size:16px;font-weight:650;line-height:1.2;text-align:center}
+  .node small{display:block;font-size:12.5px;color:var(--muted);font-weight:500;margin-top:3px}
+  .node.hot{background:color-mix(in srgb,var(--c) 22%,#120a24);border-color:var(--c)}
+  .arr{color:var(--c);font-size:20px;font-weight:700;flex:none}
+  .flow{display:flex;align-items:center;gap:9px}
+  .flow .node{flex:1}
+  .lane{margin-bottom:16px}
+  .lane .lbl{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#e9e3ff;margin-bottom:8px}
+  .lane .lbl em{font-style:normal;color:var(--muted);letter-spacing:0;text-transform:none;font-weight:500;margin-left:8px}
+  .waves{display:flex;gap:14px;align-items:flex-end;margin-top:4px}
+  .wave{flex:1;padding:10px;border-radius:12px;border:1px dashed rgba(255,255,255,.14)}
+  .wave b{display:block;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+  .wave .bx{display:flex;gap:6px}
+  .wave .bx i{flex:1;height:22px;border-radius:6px;background:color-mix(in srgb,var(--c) 35%,transparent);border:1px solid var(--c)}
+  .cap{font-size:14.5px;color:var(--muted);margin-top:10px;line-height:1.4}
+
+  /* bus diagram (team & comms) */
+  .fan{display:grid;grid-template-columns:150px 76px 1fr;height:296px;margin-top:6px}
+  .fan .k{align-self:center;padding:18px 10px;font-size:22px}
+  .bus{position:relative}
+  .bus::before{content:"";position:absolute;left:50%;top:32px;bottom:32px;border-left:2px dashed var(--c)}
+  .bus::after{content:"";position:absolute;left:0;right:50%;top:50%;border-top:2px dashed var(--c)}
+  .bus .mcp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1;font-size:12.5px;font-weight:800;letter-spacing:.12em;padding:5px 9px;border-radius:999px;background:#120a24;border:1.4px solid var(--c);color:var(--c)}
+  .tools{display:flex;flex-direction:column;justify-content:space-between}
+  .tools .row{height:64px;position:relative;display:flex;align-items:center;gap:14px;padding:0 16px;border-radius:14px;background:rgba(7,4,15,.6);border:1px solid color-mix(in srgb,var(--c) 32%,transparent)}
+  .tools .row::before{content:"";position:absolute;left:-38px;width:38px;top:50%;border-top:2px dashed var(--c)}
+  .tools .row b{font-size:16.5px;width:210px;flex:none}
+  .tools .row span{font-size:14.5px;color:var(--muted)}
+
+  /* layers (data) */
+  .layer{display:grid;grid-template-columns:170px 1fr;gap:14px;align-items:center;padding:12px 16px;border-radius:14px;background:rgba(7,4,15,.6);border:1px solid color-mix(in srgb,var(--c) 30%,transparent);margin-bottom:10px}
+  .layer > b{font-size:16px;line-height:1.25}
+  .layer > b small{display:block;font-size:12.5px;color:var(--muted);font-weight:500;margin-top:2px}
+  .layer .chips{gap:6px}
+  .layer .chip{font-size:14.5px;padding:4px 10px}
+  .up{text-align:center;color:var(--c);font-size:13px;letter-spacing:.14em;font-weight:700;margin:-2px 0 8px}
+  .guard{font-size:14.5px;color:var(--muted);padding:9px 14px;border-radius:12px;border:1px dashed rgba(255,255,255,.16)}
+  .guard b{color:#e9e3ff}
+
+  /* pipeline (IaC) */
+  .pipe{display:flex;align-items:center;gap:9px}
+  .pipe .node{flex:1;min-height:76px;display:flex;flex-direction:column;justify-content:center;position:relative}
+  .pipe.rev{flex-direction:row-reverse}
+  .down{text-align:right;color:var(--c);font-size:20px;font-weight:700;padding-right:70px;line-height:1;margin:6px 0}
+  .mtag{position:absolute;top:-9px;right:8px;font-size:10.5px;font-weight:800;letter-spacing:.1em;padding:2px 7px;border-radius:999px;background:var(--c);color:#1a1205}
+  .callout{margin-top:18px;padding:12px 16px;border-radius:14px;background:rgba(7,4,15,.6);border:1px solid rgba(255,255,255,.10);font-size:15px;color:var(--muted);line-height:1.45}
+  .callout b{color:#fff}
+
+  /* bars (models) */
+  .bars{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+  .bar{display:grid;grid-template-columns:190px 1fr 60px;align-items:center;gap:12px;font-size:15px}
+  .bar .nm{color:#e9e3ff;font-weight:600;white-space:nowrap}
+  .bar .tr{height:20px;border-radius:6px;background:rgba(255,255,255,.04);position:relative;overflow:hidden}
+  .bar .tr i{position:absolute;left:0;top:0;bottom:0;border-radius:6px;min-width:4px;width:calc(var(--v) / 4.4 * 100%)}
+  .bar .vl{font-weight:700;text-align:right;color:#e9e3ff;font-variant-numeric:tabular-nums}
+  .bar.auto .nm,.bar.auto .vl{color:var(--kiro2)}
+  .f-auto{background:linear-gradient(90deg,#7c3aed,#c08bff)}
+  .f-claude{background:linear-gradient(90deg,#be185d,#f472b6)}
+  .f-gpt{background:linear-gradient(90deg,#0e7490,#22d3ee)}
+  .f-open{background:linear-gradient(90deg,#047857,#34d399)}
+  .keys{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-top:12px}
+  .keys i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+  /* harness (surfaces) */
+  .surf{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .conn{display:flex;justify-content:space-around;color:var(--c);font-size:12.5px;font-weight:800;letter-spacing:.14em;margin:6px 0}
+  .harness{padding:14px 18px;border-radius:16px;text-align:center;background:linear-gradient(90deg,rgba(124,58,237,.45),rgba(34,211,238,.25));border:1px solid rgba(255,255,255,.22)}
+  .harness b{font-size:19px;display:block}
+  .harness span{font-size:14px;color:#e4ddfb}
+  .where{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .where .node{text-align:left;padding:12px 16px}
+
+  /* steps (enterprise) */
+  .steps{display:flex;flex-direction:column;gap:10px}
+  .step{display:grid;grid-template-columns:38px 1fr;gap:14px;align-items:center;padding:11px 16px;border-radius:14px;background:rgba(7,4,15,.6);border:1px solid color-mix(in srgb,var(--c) 30%,transparent)}
+  .step .n{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:16px;color:#07040f;background:var(--c)}
+  .step b{display:block;font-size:16.5px}
+  .step span{font-size:14.5px;color:var(--muted)}
+  .step.warn{border-color:rgba(251,191,36,.45)}
+  .step.warn .n{background:#fbbf24}
+
+  @media (prefers-reduced-motion:reduce){
+    .wire,.orbit,.halo{animation:none}
+    .card,.sec{animation:none;opacity:1}
+    .slide,.slide.active{transition:none}
+    .slide.active .an{animation:none}
+    .particle{display:none}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <nav id="nav" aria-label="Pages">
+    <a href="#overview" style="--c:var(--kiro2)"><i></i>Overview</a>
+    <a href="#build" style="--c:var(--c-build)"><i></i>Vibe &amp; spec</a>
+    <a href="#collab" style="--c:var(--c-collab)"><i></i>Team &amp; comms</a>
+    <a href="#data" style="--c:var(--c-data)"><i></i>Data &amp; knowledge</a>
+    <a href="#iac" style="--c:var(--c-iac)"><i></i>IaC</a>
+    <a href="#models" style="--c:var(--c-model)"><i></i>Models</a>
+    <a href="#surfaces" style="--c:var(--c-run)"><i></i>Surfaces</a>
+    <a href="#security" style="--c:var(--c-sec)"><i></i>Enterprise</a>
+  </nav>
+
+  <div id="pager">
+    <span>← → to move · F fullscreen</span>
+    <button id="prev" aria-label="Previous page">‹</button>
+    <button id="next" aria-label="Next page">›</button>
+  </div>
+
+  <!-- =================================================================
+       0. OVERVIEW
+       ================================================================= -->
+  <section class="slide" id="s-overview" data-id="overview">
+  <header>
+    <div>
+      <div class="eyebrow">Agentic development · built on AWS</div>
+      <h1>Kiro: <span class="grad">one agent at the center</span> of your engineering</h1>
+      <div class="sub">From vibe coding to production IaC, connected to your tools and governed by your enterprise.</div>
+    </div>
+    <div class="badges">
+      <div class="badge"><i style="background:var(--c-build)"></i>Agentic</div>
+      <div class="badge"><i style="background:var(--c-collab)"></i>Connected</div>
+      <div class="badge"><i style="background:var(--c-sec)"></i>Governed</div>
+    </div>
+  </header>
+
+  <!-- ========== wires, orbit ring, flowing particles ========== -->
+  <svg id="wires" viewBox="0 0 1920 1080" role="img" aria-label="Connections from Kiro to each capability area">
+    <defs>
+      <path id="ring" d="M960,560 m-180,0 a180,180 0 1,1 360,0 a180,180 0 1,1 -360,0"/>
+      <!-- A build, B collab, C data, D iac, E models, F interfaces, G security -->
+      <path id="pA" d="M784,465 C640,400 600,290 460,290"/>
+      <path id="pB" d="M760,556 C650,556 590,550 460,550"/>
+      <path id="pC" d="M781,649 C640,720 600,810 460,810"/>
+      <path id="pD" d="M1136,465 C1280,400 1320,290 1460,290"/>
+      <path id="pE" d="M1160,556 C1270,556 1330,550 1460,550"/>
+      <path id="pF" d="M1139,649 C1280,720 1320,810 1460,810"/>
+      <path id="pG" d="M960,762 L960,858"/>
+    </defs>
+
+    <!-- halo + guardrail ring -->
+    <circle class="halo" cx="960" cy="560" r="152" fill="none" stroke="#9b5cff" stroke-width="2"/>
+    <circle cx="960" cy="560" r="196" fill="none" stroke="rgba(125,211,252,.35)" stroke-width="1.2" stroke-dasharray="2 7"/>
+    <g class="orbit">
+      <text><textPath href="#ring" textLength="1110" lengthAdjust="spacing">ENTERPRISE GUARDRAILS · SSO · KMS · PRIVATELINK · AUDIT · MCP REGISTRY · MODEL ALLOW-LIST ·</textPath></text>
+    </g>
+
+    <!-- glow underlays -->
+    <use href="#pA" class="wire-glow" stroke="#a78bfa"/>
+    <use href="#pB" class="wire-glow" stroke="#38bdf8"/>
+    <use href="#pC" class="wire-glow" stroke="#34d399"/>
+    <use href="#pD" class="wire-glow" stroke="#fbbf24"/>
+    <use href="#pE" class="wire-glow" stroke="#f472b6"/>
+    <use href="#pF" class="wire-glow" stroke="#22d3ee"/>
+    <use href="#pG" class="wire-glow" stroke="#7dd3fc"/>
+
+    <!-- animated dashed wires -->
+    <use href="#pA" class="wire" stroke="#a78bfa"/>
+    <use href="#pB" class="wire" stroke="#38bdf8"/>
+    <use href="#pC" class="wire" stroke="#34d399"/>
+    <use href="#pD" class="wire" stroke="#fbbf24"/>
+    <use href="#pE" class="wire" stroke="#f472b6"/>
+    <use href="#pF" class="wire" stroke="#22d3ee"/>
+    <use href="#pG" class="wire" stroke="#7dd3fc"/>
+
+    <!-- particles: outbound (Kiro -> tool) and inbound (tool -> Kiro) -->
+    <g id="particles"></g>
+
+    <!-- MCP labels on the wires that go through MCP servers -->
+    <g class="pill" transform="translate(618,553)"><rect x="-34" y="-14" width="68" height="28" rx="14" stroke="#38bdf8"/><text fill="#7dd3fc">MCP</text></g>
+    <g class="pill" transform="translate(620,756)"><rect x="-34" y="-14" width="68" height="28" rx="14" stroke="#34d399"/><text fill="#6ee7b7">MCP</text></g>
+    <g class="pill" transform="translate(1300,353)"><rect x="-34" y="-14" width="68" height="28" rx="14" stroke="#fbbf24"/><text fill="#fcd34d">MCP</text></g>
+  </svg>
+
+  <!-- ========== hub ========== -->
+  <div class="hub" aria-label="Kiro">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <path d="M22,88 L22,46 A28,28 0 0 1 78,46 L78,88 L68.5,79 L59,88 L50,79 L41,88 L31.5,79 Z" fill="#fff"/>
+      <ellipse cx="41" cy="50" rx="4.6" ry="6.4" fill="#3b0f8c"/>
+      <ellipse cx="59" cy="50" rx="4.6" ry="6.4" fill="#3b0f8c"/>
+    </svg>
+    <div class="name">Kiro</div>
+    <div class="tag">IDE · CLI · Web · Mobile</div>
+  </div>
+
+  <!-- ========== left column ========== -->
+  <div class="card l t" data-go="build" style="--c:var(--c-build);animation-delay:.15s">
+    <span class="go">→</span>
+    <div class="top">
+      <div class="ico"><svg viewBox="0 0 24 24"><polyline points="8 6 2 12 8 18"/><polyline points="16 6 22 12 16 18"/><line x1="14" y1="4" x2="10" y2="20"/></svg></div>
+      <h3><small>How it codes</small>Vibe &amp; spec-driven</h3>
+    </div>
+    <p>Chat and iterate fast, or go from requirements to design to tasks before a line is written.</p>
+    <div class="chips"><span class="chip">Vibe coding</span><span class="chip">Specs</span><span class="chip">Agent hooks</span><span class="chip">Steering</span><span class="chip">Subagents</span></div>
+  </div>
+
+  <div class="card l m" data-go="collab" style="--c:var(--c-collab);animation-delay:.3s">
+    <span class="go">→</span>
+    <div class="top">
+      <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="12.5" x2="13" y2="12.5"/></svg></div>
+      <h3><small>Where work happens</small>Team &amp; comms tools</h3>
+    </div>
+    <p>Via MCP: reads the thread, drafts the reply, files the ticket.</p>
+    <div class="chips"><span class="chip">Slack</span><span class="chip">Email &amp; calendar</span><span class="chip">Jira · GitHub</span><span class="chip">Wikis</span></div>
+  </div>
+
+  <div class="card l b" data-go="data" style="--c:var(--c-data);animation-delay:.45s">
+    <span class="go">→</span>
+    <div class="top">
+      <div class="ico"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></div>
+      <h3><small>Grounded in your data</small>Data &amp; knowledge</h3>
+    </div>
+    <p>Via MCP: queries real schemas and documents so answers match what exists.</p>
+    <div class="chips"><span class="chip">Databases</span><span class="chip">S3 · data lakes</span><span class="chip">Warehouses</span><span class="chip">Knowledge bases</span></div>
+  </div>
+
+  <!-- ========== right column ========== -->
+  <div class="card r t" data-go="iac" style="--c:var(--c-iac);animation-delay:.2s">
+    <span class="go">→</span>
+    <div class="top">
+      <div class="ico"><svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.5 4.5 4.5 0 0 0 7 18z"/></svg></div>
+      <h3><small>Ships infrastructure</small>IaC, any cloud</h3>
+    </div>
+    <p>Writes IaC. The AWS IaC MCP server adds validation and compliance checks.</p>
+    <div class="chips"><span class="chip">AWS CDK</span><span class="chip">CloudFormation</span><span class="chip">Terraform</span><span class="chip">Multi-cloud code</span></div>
+  </div>
+
+  <div class="card r m" data-go="models" style="--c:var(--c-model);animation-delay:.35s">
+    <span class="go">→</span>
+    <div class="top">
+      <div class="ico"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></div>
+      <h3><small>Choice of brain</small>Frontier models</h3>
+    </div>
+    <p>Pick per task, or let Auto route. Enterprise admins decide which models are allowed.</p>
+    <div class="chips"><span class="chip">Auto</span><span class="chip">Claude Opus · Sonnet</span><span class="chip">GPT-5.6</span><span class="chip">Open-weight</span></div>
+  </div>
+
+  <div class="card r b" data-go="surfaces" style="--c:var(--c-run);animation-delay:.5s">
+    <span class="go">→</span>
+    <div class="top">
+      <div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="14" height="10" rx="1.5"/><path d="M6 18h6M9 14v4"/><rect x="17" y="8" width="5" height="12" rx="1.2"/></svg></div>
+      <h3><small>Runs where you work</small>IDE · CLI · Web · Mobile</h3>
+    </div>
+    <p>One agent harness on every surface, with cloud sessions that outlive your laptop.</p>
+    <div class="chips"><span class="chip">Desktop IDE</span><span class="chip">Terminal CLI</span><span class="chip">Web · cloud sessions</span><span class="chip">Mobile</span></div>
+  </div>
+
+  <!-- ========== enterprise security band ========== -->
+  <div class="sec" data-go="security" style="--c:var(--c-sec)">
+    <div class="head">
+      <svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>
+      Enterprise controls
+      <span>for Kiro Enterprise profiles; some do not apply to Kiro Web</span>
+    </div>
+    <div class="grid">
+      <div class="g"><b>Single sign-on</b><em>Identity Center · Okta · Entra</em></div>
+      <div class="g"><b>Model allow-list</b><em>approved models + default</em></div>
+      <div class="g"><b>MCP registry</b><em>allow-list of MCP servers</em></div>
+      <div class="g"><b>KMS encryption</b><em>customer-managed keys</em></div>
+      <div class="g"><b>PrivateLink</b><em>VPC interface endpoints</em></div>
+      <div class="g"><b>Prompt logging</b><em>IDE &amp; CLI logs to your S3</em></div>
+      <div class="g"><b>IAM &amp; SCPs</b><em>subscription governance</em></div>
+      <div class="g"><b>No service training</b><em>enterprise content not used</em></div>
+    </div>
+  </div>
+
+  <footer>
+    <div>Prepared by Vjenceslav Nadinic · October 14, 2026 · Updated Nov 11, 2026 against kiro.dev/docs. Personal view, not official AWS guidance. Features and availability change. Click any card for details.</div>
+  </footer>
+  </section>
+
+  <!-- =================================================================
+       1. VIBE & SPEC
+       ================================================================= -->
+  <section class="slide detail" id="s-build" data-id="build" style="--c:var(--c-build)">
+    <div class="dh an">
+      <div class="eyebrow">01 · How it codes</div>
+      <h1>Vibe coding &amp; spec-driven development</h1>
+      <div class="sub">Two ways to build with the same agent: talk it through, or plan it first.</div>
+      <div class="pg">01 / 07</div>
+    </div>
+    <div class="db">
+      <div class="col">
+        <p class="lead an" style="--d:.05s"><b>Vibe coding</b> is a conversation: describe what you want, Kiro reads your project, makes the change, and you iterate. <b>Spec-driven development</b> adds a plan first: Kiro turns an idea into requirements, a design and a task list that you review before any code is written.</p>
+        <div class="tiles">
+          <div class="tile an" style="--d:.1s"><h5>Vibe chat</h5><p>Ask or instruct in plain language. Kiro tells questions from requests. Add context with <code>#codebase</code>, <code>#file</code>, <code>#git diff</code>, <code>#terminal</code> or <code>#mcp</code>.</p></div>
+          <div class="tile an" style="--d:.15s"><h5>Specs</h5><p>Three files per feature: <code>requirements.md</code> (user stories, acceptance criteria), <code>design.md</code> (architecture, diagrams) and <code>tasks.md</code> (trackable steps). Bug fixes use <code>bugfix.md</code>.</p></div>
+          <div class="tile an" style="--d:.2s"><h5>Steering</h5><p>Markdown files in <code>.kiro/steering/</code> teach Kiro your stack and conventions once. Load them always, by file pattern, on demand or automatically. <code>AGENTS.md</code> works too.</p></div>
+          <div class="tile an" style="--d:.25s"><h5>Hooks &amp; sub-agents</h5><p>Hooks run a command or prompt on events such as a file save or tool call, for example lint on save. Sub-agents take focused work in their own context, in parallel.</p></div>
+        </div>
+        <div class="try an" style="--d:.3s">
+          <h4>Try saying</h4>
+          <div class="q">“Create a React component for a user profile page.” <span style="color:var(--muted)">(vibe)</span></div>
+          <div class="q">“New spec: add password reset to our login flow.” <span style="color:var(--muted)">(spec)</span></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="vis an" style="--d:.1s">
+          <h4>Two ways to work</h4>
+          <div class="lane">
+            <div class="lbl">Vibe <em>fast feedback loop</em></div>
+            <div class="flow"><div class="node">Prompt</div><span class="arr">→</span><div class="node">Kiro edits</div><span class="arr">→</span><div class="node">You review</div><span class="arr">→</span><div class="node">Iterate ↺</div></div>
+          </div>
+          <div class="lane">
+            <div class="lbl">Spec <em>plan, approve, then build</em></div>
+            <div class="flow"><div class="node">requirements.md<small>what &amp; why</small></div><span class="arr">→</span><div class="node">design.md<small>how</small></div><span class="arr">→</span><div class="node hot">tasks.md<small>steps</small></div></div>
+          </div>
+          <div class="waves">
+            <div class="wave"><b>Wave 1</b><div class="bx"><i></i><i></i><i></i></div></div>
+            <div class="wave"><b>Wave 2</b><div class="bx"><i></i><i></i></div></div>
+            <div class="wave"><b>Wave 3</b><div class="bx"><i></i></div></div>
+          </div>
+          <div class="cap">“Run all tasks” builds a dependency graph from <b style="color:#e9e3ff">tasks.md</b> and runs independent tasks at the same time, wave by wave.</div>
+        </div>
+        <div class="avail an" style="--d:.2s">
+          <h4>Where it works</h4>
+          <table>
+            <tr><th></th><th>IDE</th><th>CLI</th><th>Web</th><th>Mobile</th></tr>
+            <tr><td>Specs</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td></tr>
+            <tr><td>Steering (workspace)</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+            <tr><td>Hooks</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td></tr>
+          </table>
+          <div class="legend">✓ available · — not available · ? not documented</div>
+        </div>
+      </div>
+    </div>
+    <div class="note an" style="--d:.35s">
+      <div class="cav"><b style="color:#e9e3ff">Good to know:</b> Quick Spec generates all three spec files without approval gates for well-understood features. Property-based correctness testing of specs is IDE-only today. Sub-agents work on every surface.</div>
+      <div class="links"><span>Learn more</span><a href="https://kiro.dev/docs/specs/" target="_blank" rel="noopener">Specs</a><a href="https://kiro.dev/docs/steering/" target="_blank" rel="noopener">Steering</a><a href="https://kiro.dev/docs/hooks/" target="_blank" rel="noopener">Hooks</a></div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       2. TEAM & COMMS
+       ================================================================= -->
+  <section class="slide detail" id="s-collab" data-id="collab" style="--c:var(--c-collab)">
+    <div class="dh an">
+      <div class="eyebrow">02 · Where work happens</div>
+      <h1>Team &amp; comms tools</h1>
+      <div class="sub">Kiro works with the systems your team already uses, through the Model Context Protocol (MCP).</div>
+      <div class="pg">02 / 07</div>
+    </div>
+    <div class="db">
+      <div class="col">
+        <p class="lead an" style="--d:.05s"><b>MCP</b> is an open protocol that lets Kiro call tools on external servers. Connect a server for your tracker, code host or chat tool, and Kiro can read an issue, comment on it, open a pull request or draft a reply from the same conversation.</p>
+        <div class="tiles">
+          <div class="tile an" style="--d:.1s"><h5>MCP servers</h5><p>Add local or remote servers in <code>.kiro/settings/mcp.json</code>, or install with one click from the Kiro MCP directory. Kiro asks you to confirm before it changes your config.</p></div>
+          <div class="tile an" style="--d:.15s"><h5>Repos &amp; trackers</h5><p>The curated directory includes GitHub, GitLab and Atlassian (Jira, Confluence). The GitHub server covers repos, branches, issues and pull requests.</p></div>
+          <div class="tile an" style="--d:.2s"><h5>Powers</h5><p>Bundles of MCP tools plus know-how that load only when the task needs them, so context stays small. Examples: Datadog, Figma, Postman, Stripe.</p></div>
+          <div class="tile an" style="--d:.25s"><h5>Pull-request loop</h5><p>On Kiro Web the agent opens PRs and answers review comments. <code>/kiro all</code> or <code>/kiro fix</code> says which to address. It never merges for you.</p></div>
+        </div>
+        <div class="try an" style="--d:.3s">
+          <h4>Try saying</h4>
+          <div class="q">“Find open bugs labeled <code>login</code> and summarize them by severity.”</div>
+          <div class="q">“Create an issue in my repository about the login bug.”</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="vis an" style="--d:.1s">
+          <h4>One agent, many tools</h4>
+          <div class="fan">
+            <div class="node hot k" style="--c:var(--kiro)">Kiro</div>
+            <div class="bus"><span class="mcp">MCP</span></div>
+            <div class="tools">
+              <div class="row"><b>GitHub · GitLab</b><span>read an issue, open a pull request</span></div>
+              <div class="row"><b>Jira · Confluence</b><span>update the ticket, read the spec page</span></div>
+              <div class="row"><b>Slack · email · calendar</b><span>read the thread, draft the reply</span></div>
+              <div class="row"><b>Datadog · Grafana</b><span>pull the errors behind an alert</span></div>
+            </div>
+          </div>
+          <div class="cap">Each server runs with the token or OAuth sign-in you give it, so Kiro sees only what that account can see.</div>
+        </div>
+        <div class="avail an" style="--d:.2s">
+          <h4>Where it works</h4>
+          <table>
+            <tr><th></th><th>IDE</th><th>CLI</th><th>Web</th><th>Mobile</th></tr>
+            <tr><td>MCP servers (local &amp; remote)</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td></tr>
+            <tr><td>Powers</td><td class="y">✓</td><td class="p">V3</td><td class="y">✓</td><td class="n">—</td></tr>
+            <tr><td>Autonomous mode → PRs</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+          </table>
+          <div class="legend">✓ available · — not available · V3 = Kiro CLI V3 harness</div>
+        </div>
+      </div>
+    </div>
+    <div class="note an" style="--d:.35s">
+      <div class="cav"><b style="color:#e9e3ff">Good to know:</b> Slack and email/calendar connect through vendor or in-house MCP servers. Kiro's curated directory lists GitHub, GitLab and Atlassian. In an enterprise, admins can limit which servers are allowed (see Enterprise).</div>
+      <div class="links"><span>Learn more</span><a href="https://kiro.dev/docs/mcp/" target="_blank" rel="noopener">MCP in Kiro</a><a href="https://kiro.dev/mcp/" target="_blank" rel="noopener">MCP server directory</a><a href="https://kiro.dev/docs/powers/" target="_blank" rel="noopener">Powers</a></div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       3. DATA & KNOWLEDGE
+       ================================================================= -->
+  <section class="slide detail" id="s-data" data-id="data" style="--c:var(--c-data)">
+    <div class="dh an">
+      <div class="eyebrow">03 · Grounded in your data</div>
+      <h1>Data &amp; knowledge</h1>
+      <div class="sub">Answers built from your real schemas, documents and docs, not guesses.</div>
+      <div class="pg">03 / 07</div>
+    </div>
+    <div class="db">
+      <div class="col">
+        <p class="lead an" style="--d:.05s">Kiro already reads your code. <b>MCP servers</b> let it also look at databases, data lakes and knowledge bases, so the SQL, pipelines and answers it writes match the tables and documents that actually exist.</p>
+        <div class="tiles">
+          <div class="tile an" style="--d:.1s"><h5>Databases &amp; warehouses</h5><p>AWS Labs MCP servers for DynamoDB, Aurora PostgreSQL and Redshift. The Kiro directory adds Snowflake, Databricks and MongoDB.</p></div>
+          <div class="tile an" style="--d:.15s"><h5>Data lakes</h5><p>The S3 Tables server works with Apache Iceberg tables stored in Amazon S3, so Kiro can see table layouts before it writes a query or job.</p></div>
+          <div class="tile an" style="--d:.2s"><h5>Knowledge bases</h5><p>Search Amazon Bedrock Knowledge Bases, vector stores such as Pinecone, graph data in Neo4j, and AWS documentation itself.</p></div>
+          <div class="tile an" style="--d:.25s"><h5>Project knowledge</h5><p>Steering files can link live files, for example <code>#[[file:api/openapi.yaml]]</code>, so your API spec or data dictionary stays in context.</p></div>
+        </div>
+        <div class="try an" style="--d:.3s">
+          <h4>Try saying</h4>
+          <div class="q">“Look at the <code>orders</code> table and write a query for last week's revenue by region.”</div>
+          <div class="q">“Search our knowledge base for the refund policy and update the FAQ page.”</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="vis an" style="--d:.1s">
+          <h4>What Kiro can draw on</h4>
+          <div class="up">▲ INTO KIRO'S CONTEXT ▲</div>
+          <div class="layer"><b>Your project<small>always available</small></b><div class="chips"><span class="chip">Code</span><span class="chip">Docs &amp; READMEs</span><span class="chip">OpenAPI spec</span><span class="chip">Data dictionary</span><span class="chip">#codebase</span></div></div>
+          <div class="layer"><b>Live data<small>via MCP</small></b><div class="chips"><span class="chip">DynamoDB</span><span class="chip">Aurora PostgreSQL</span><span class="chip">Redshift</span><span class="chip">S3 Tables</span><span class="chip">Snowflake</span><span class="chip">Databricks</span><span class="chip">MongoDB</span></div></div>
+          <div class="layer"><b>Knowledge<small>via MCP</small></b><div class="chips"><span class="chip">Bedrock Knowledge Bases</span><span class="chip">Pinecone</span><span class="chip">Neo4j</span><span class="chip">Elastic</span><span class="chip">AWS docs</span></div></div>
+          <div class="guard"><b>Kiroignore</b> keeps secrets and sensitive files out of the agent's reach, using gitignore-style patterns.</div>
+        </div>
+        <div class="avail an" style="--d:.2s">
+          <h4>Where it works</h4>
+          <table>
+            <tr><th></th><th>IDE</th><th>CLI</th><th>Web</th><th>Mobile</th></tr>
+            <tr><td>MCP servers</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td></tr>
+            <tr><td>Powers (e.g. Aurora, Neon)</td><td class="y">✓</td><td class="p">V3</td><td class="y">✓</td><td class="n">—</td></tr>
+            <tr><td>Steering with file links</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+          </table>
+          <div class="legend">✓ available · — not available · V3 = Kiro CLI V3 harness</div>
+        </div>
+      </div>
+    </div>
+    <div class="note an" style="--d:.35s">
+      <div class="cav"><b style="color:#e9e3ff">Good to know:</b> Give data servers read-only credentials where you can. Query results go to the model as context, so treat sensitive tables the way you would any other prompt content.</div>
+      <div class="links"><span>Learn more</span><a href="https://awslabs.github.io/mcp/" target="_blank" rel="noopener">AWS MCP servers</a><a href="https://kiro.dev/mcp/" target="_blank" rel="noopener">MCP server directory</a><a href="https://kiro.dev/docs/steering/" target="_blank" rel="noopener">Steering file links</a></div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       4. IaC
+       ================================================================= -->
+  <section class="slide detail" id="s-iac" data-id="iac" style="--c:var(--c-iac)">
+    <div class="dh an">
+      <div class="eyebrow">04 · Ships infrastructure</div>
+      <h1>Infrastructure as code, any cloud</h1>
+      <div class="sub">Kiro writes the templates; MCP tools check them before you deploy.</div>
+      <div class="pg">04 / 07</div>
+    </div>
+    <div class="db">
+      <div class="col">
+        <p class="lead an" style="--d:.05s">Kiro writes <b>AWS CDK, CloudFormation and Terraform</b> like any other code. Add the <b>AWS IaC MCP server</b> and it can also validate templates, check them against security rules, and explain why a deployment failed.</p>
+        <div class="tiles">
+          <div class="tile an" style="--d:.1s"><h5>Write</h5><p>CDK in TypeScript, Python, Java, C# or Go. CloudFormation in YAML or JSON. Terraform for AWS and other clouds.</p></div>
+          <div class="tile an" style="--d:.15s"><h5>Validate</h5><p>Runs cfn-lint on a template and returns each error with a suggested fix and its line number.</p></div>
+          <div class="tile an" style="--d:.2s"><h5>Comply</h5><p>Runs cfn-guard security and compliance rules on the template before anything is deployed, with remediation guidance.</p></div>
+          <div class="tile an" style="--d:.25s"><h5>Troubleshoot</h5><p>Point it at a failed stack: it matches more than 30 known failure patterns and links the related CloudTrail events.</p></div>
+        </div>
+        <div class="try an" style="--d:.3s">
+          <h4>Try saying</h4>
+          <div class="q">“Write a CDK stack for a versioned, KMS-encrypted S3 bucket, then check it for compliance.”</div>
+          <div class="q">“Troubleshoot my CloudFormation stack named <code>my-app-stack</code> in us-east-1.”</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="vis an" style="--d:.1s">
+          <h4>From idea to running stack</h4>
+          <div class="pipe">
+            <div class="node">1 · Describe<small>chat or spec</small></div><span class="arr">→</span>
+            <div class="node">2 · Generate<small>CDK · CFN · Terraform</small></div><span class="arr">→</span>
+            <div class="node hot">3 · Validate<small>cfn-lint</small><span class="mtag">IaC MCP</span></div>
+          </div>
+          <div class="down">↓</div>
+          <div class="pipe rev">
+            <div class="node hot">4 · Comply<small>cfn-guard rules</small><span class="mtag">IaC MCP</span></div><span class="arr">←</span>
+            <div class="node">5 · Deploy<small>your pipeline or CLI</small></div><span class="arr">←</span>
+            <div class="node hot">6 · Troubleshoot<small>stack events + CloudTrail</small><span class="mtag">IaC MCP</span></div>
+          </div>
+          <div class="callout"><b>Automate the checks:</b> a hook can run <code style="font-family:Menlo,monospace">cdk synth</code> or cfn-lint every time Kiro saves a template, and steering can hold your tagging and naming rules.</div>
+        </div>
+        <div class="avail an" style="--d:.2s">
+          <h4>Where it works</h4>
+          <table>
+            <tr><th></th><th>IDE</th><th>CLI</th><th>Web</th><th>Mobile</th></tr>
+            <tr><td>MCP servers (IaC checks)</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td></tr>
+            <tr><td>Hooks (check on save)</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="n">—</td></tr>
+            <tr><td>Specs (plan the stack)</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td></tr>
+          </table>
+          <div class="legend">✓ available · — not available · ? not documented</div>
+        </div>
+      </div>
+    </div>
+    <div class="note an" style="--d:.35s">
+      <div class="cav"><b style="color:#e9e3ff">Good to know:</b> The AWS IaC server's checks target CloudFormation (CDK synthesizes to it). For Terraform, add the HashiCorp server from the directory. Troubleshooting uses your AWS credentials, so a read-only role is enough.</div>
+      <div class="links"><span>Learn more</span><a href="https://awslabs.github.io/mcp/servers/aws-iac-mcp-server" target="_blank" rel="noopener">AWS IaC MCP server</a><a href="https://kiro.dev/docs/hooks/" target="_blank" rel="noopener">Hooks</a><a href="https://kiro.dev/mcp/" target="_blank" rel="noopener">MCP directory (HashiCorp, Azure, GCP)</a></div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       5. MODELS
+       ================================================================= -->
+  <section class="slide detail" id="s-models" data-id="models" style="--c:var(--c-model)">
+    <div class="dh an">
+      <div class="eyebrow">05 · Choice of brain</div>
+      <h1>Frontier and open-weight models</h1>
+      <div class="sub">Pick a model per task, or let Auto pick for you.</div>
+      <div class="pg">05 / 07</div>
+    </div>
+    <div class="db">
+      <div class="col">
+        <p class="lead an" style="--d:.05s">Kiro offers models from <b>Anthropic, OpenAI</b> and <b>open-weight</b> providers. <b>Auto</b> sends each task to a suitable model and is the cost baseline (1.0x). Every other model uses more or fewer credits than Auto for the same task.</p>
+        <div class="tiles">
+          <div class="tile an" style="--d:.1s"><h5>Auto</h5><p>The recommended starting point for most work. It balances quality and credit cost task by task, so you don't have to choose.</p></div>
+          <div class="tile an" style="--d:.15s"><h5>Frontier</h5><p>Claude Opus 5.5 and Sonnet 5.5, and GPT-5.6 in three tiers: Sol, Terra and Luna. All have a 1M-token context window.</p></div>
+          <div class="tile an" style="--d:.2s"><h5>Open-weight</h5><p>MiniMax M2.5, GLM-5, Qwen3 Coder Next, DeepSeek 3.2 and Kimi K3. Most cost a fraction of Auto.</p></div>
+          <div class="tile an" style="--d:.25s"><h5>Effort &amp; fallback</h5><p>Raise reasoning effort for hard problems or lower it for speed. A fallback model can answer when your chosen model is unavailable.</p></div>
+        </div>
+        <div class="try an" style="--d:.3s">
+          <h4>Try saying</h4>
+          <div class="q">Pick <b>Opus 5.5</b>: “Refactor the payments service to the new auth middleware.”</div>
+          <div class="q">Pick <b>Haiku 5.5</b>: “Write docstrings for every function in <code>utils/</code>.”</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="vis an" style="--d:.1s">
+          <h4>Credit cost relative to Auto</h4>
+          <div class="bars">
+            <div class="bar"><span class="nm">Qwen3 Coder Next</span><span class="tr"><i class="f-open" style="--v:.05"></i></span><span class="vl">0.05x</span></div>
+            <div class="bar"><span class="nm">Claude Haiku 5.5</span><span class="tr"><i class="f-claude" style="--v:.06"></i></span><span class="vl">0.06x</span></div>
+            <div class="bar"><span class="nm">MiniMax M2.5</span><span class="tr"><i class="f-open" style="--v:.25"></i></span><span class="vl">0.25x</span></div>
+            <div class="bar"><span class="nm">GPT-5.6 Luna</span><span class="tr"><i class="f-gpt" style="--v:.6"></i></span><span class="vl">0.6x</span></div>
+            <div class="bar auto"><span class="nm">Auto</span><span class="tr"><i class="f-auto" style="--v:1"></i></span><span class="vl">1.0x</span></div>
+            <div class="bar"><span class="nm">Claude Sonnet 5.5</span><span class="tr"><i class="f-claude" style="--v:1.3"></i></span><span class="vl">1.3x</span></div>
+            <div class="bar"><span class="nm">Claude Opus 5.5</span><span class="tr"><i class="f-claude" style="--v:2"></i></span><span class="vl">2.0x</span></div>
+            <div class="bar"><span class="nm">GPT-5.6 Terra</span><span class="tr"><i class="f-gpt" style="--v:2.2"></i></span><span class="vl">2.2x</span></div>
+            <div class="bar"><span class="nm">GPT-5.6 Sol</span><span class="tr"><i class="f-gpt" style="--v:4.4"></i></span><span class="vl">4.4x</span></div>
+          </div>
+          <div class="keys"><span><i class="f-auto"></i>Auto</span><span><i class="f-claude"></i>Anthropic</span><span><i class="f-gpt"></i>OpenAI</span><span><i class="f-open"></i>Open-weight</span></div>
+          <div class="cap">GPT-5.6 costs double above 272K tokens per request; Haiku 5.5 rises to 0.3x above 100K.</div>
+        </div>
+        <div class="avail an" style="--d:.2s">
+          <h4>Where it works</h4>
+          <table>
+            <tr><th></th><th>IDE</th><th>CLI</th><th>Web</th><th>Mobile</th></tr>
+            <tr><td>Model picker incl. Auto</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="u">?</td></tr>
+            <tr><td>Reasoning effort</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td></tr>
+            <tr><td>Autonomous mode (picks model)</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+          </table>
+          <div class="legend">✓ available · — not available · ? not documented</div>
+        </div>
+      </div>
+    </div>
+    <div class="note an" style="--d:.35s">
+      <div class="cav"><b style="color:#e9e3ff">Good to know:</b> Admins can restrict users to an approved list and set a default model. Claude Fable 5.1 (Enterprise only, 6x) and Kimi K3 stay off until an admin adds them. GPT-5.6 may run in any commercial AWS Region (Global scope); Kiro still stores data in your profile's Region.</div>
+      <div class="links"><span>Learn more</span><a href="https://kiro.dev/docs/models/" target="_blank" rel="noopener">Models &amp; pricing multipliers</a><a href="https://kiro.dev/docs/enterprise/governance/model/" target="_blank" rel="noopener">Model governance</a><a href="https://kiro.dev/docs/privacy-and-security/data-protection/" target="_blank" rel="noopener">Inference Regions</a></div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       6. SURFACES
+       ================================================================= -->
+  <section class="slide detail" id="s-surfaces" data-id="surfaces" style="--c:var(--c-run)">
+    <div class="dh an">
+      <div class="eyebrow">06 · Runs where you work</div>
+      <h1>IDE · CLI · Web · Mobile</h1>
+      <div class="sub">Four ways to talk to one agent; your configuration follows you.</div>
+      <div class="pg">06 / 07</div>
+    </div>
+    <div class="db">
+      <div class="col">
+        <p class="lead an" style="--d:.05s">Every surface is a front end to the <b>same agent harness</b>. A steering file, custom agent, permission rule or MCP server you set up once behaves the same in the editor, the terminal, the browser and on your phone. Commit <code>.kiro/</code> and the whole team gets it.</p>
+        <div class="tiles">
+          <div class="tile an" style="--d:.1s"><h5>IDE</h5><p>Desktop editor with inline diffs, checkpoints, spec panes and editor problems shared with the agent. Agent Focus Mode manages cloud sessions.</p></div>
+          <div class="tile an" style="--d:.15s"><h5>CLI</h5><p><code>kiro-cli</code> in your terminal. Headless mode runs prompts in CI/CD with API keys. ACP brings the agent into other editors.</p></div>
+          <div class="tile an" style="--d:.2s"><h5>Web</h5><p>app.kiro.dev with no setup. Works in a cloud sandbox and delivers pull requests. Default, Spec and Autonomous modes.</p></div>
+          <div class="tile an" style="--d:.25s"><h5>Mobile</h5><p>iOS app in early access through TestFlight. Start and steer cloud sessions from your phone.</p></div>
+        </div>
+        <div class="try an" style="--d:.3s">
+          <h4>Try saying</h4>
+          <div class="q">On Web, Autonomous: “Upgrade this repo to Node 22, fix the tests and open a PR.”</div>
+          <div class="q">Close the laptop, then check progress and approve from your phone.</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="vis an" style="--d:.1s">
+          <h4>One harness, two places to run</h4>
+          <div class="surf">
+            <div class="node">IDE<small>editor</small></div>
+            <div class="node">CLI<small>terminal · CI</small></div>
+            <div class="node">Web<small>browser</small></div>
+            <div class="node">Mobile<small>iOS</small></div>
+          </div>
+          <div class="conn"><span>▼ ACP</span><span>▼ ACP</span><span>▼ ACP</span><span>▼ ACP</span></div>
+          <div class="harness"><b>One agent harness</b><span>context · model · permissions · tools · hooks · compaction</span></div>
+          <div class="conn" style="justify-content:space-around"><span>▼ local</span><span>▼ cloud</span></div>
+          <div class="where">
+            <div class="node">Your machine<small>IDE and CLI by default: your files, shell, toolchain and credentials</small></div>
+            <div class="node hot">Cloud sandbox<small>Web, Mobile and cloud sessions: clones the repo, keeps running when you disconnect</small></div>
+          </div>
+        </div>
+        <div class="avail an" style="--d:.2s">
+          <h4>Where it works</h4>
+          <table>
+            <tr><th></th><th>IDE</th><th>CLI</th><th>Web</th><th>Mobile</th></tr>
+            <tr><td>Create / resume cloud session</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+            <tr><td>Autonomous mode</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+            <tr><td>Scheduled tasks</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td><td class="n">—</td></tr>
+          </table>
+          <div class="legend">✓ available · — not available · ? not documented</div>
+        </div>
+      </div>
+    </div>
+    <div class="note an" style="--d:.35s">
+      <div class="cav"><b style="color:#e9e3ff">Good to know:</b> Kiro Web and cloud sessions need a Pro plan or higher and run in us-east-1, with up to 10 in parallel. For IAM Identity Center organizations, an admin must turn on Cloud Sessions first. Kiro never merges a PR by itself.</div>
+      <div class="links"><span>Learn more</span><a href="https://kiro.dev/docs/how-kiro-works/" target="_blank" rel="noopener">How Kiro works</a><a href="https://kiro.dev/docs/cloud-sessions/" target="_blank" rel="noopener">Cloud sessions</a><a href="https://kiro.dev/docs/cli/" target="_blank" rel="noopener">Kiro CLI</a></div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       7. ENTERPRISE
+       ================================================================= -->
+  <section class="slide detail" id="s-security" data-id="security" style="--c:var(--c-sec)">
+    <div class="dh an">
+      <div class="eyebrow">07 · Governed by your enterprise</div>
+      <h1>Enterprise controls</h1>
+      <div class="sub">Admins set identity, model, tool and data policies centrally in the Kiro console.</div>
+      <div class="pg">07 / 07</div>
+    </div>
+    <div class="db">
+      <div class="col">
+        <p class="lead an" style="--d:.05s">Kiro Enterprise is managed from the <b>Kiro console in AWS</b>. Admins decide who can sign in, which models and MCP servers people may use, how data is encrypted and logged, and how network traffic reaches Kiro. Policies can be set per organization or per account.</p>
+        <div class="tiles">
+          <div class="tile an" style="--d:.1s"><h5>Identity</h5><p>Sign-in through IAM Identity Center, Okta or Microsoft Entra ID. AWS GovCloud (US) also supports a custom OIDC provider.</p></div>
+          <div class="tile an" style="--d:.15s"><h5>Governance</h5><p>Approved model list and default model. MCP on, off or limited to a registry. API keys, web tools and Cloud Sessions each switch on or off.</p></div>
+          <div class="tile an" style="--d:.2s"><h5>Data protection</h5><p>Enterprise content is not used for service improvement. TLS 1.2+ in transit. AWS-owned KMS keys by default, or your own customer-managed key.</p></div>
+          <div class="tile an" style="--d:.25s"><h5>Audit &amp; network</h5><p>Prompt logging from IDE and CLI to an S3 bucket in your account. PrivateLink endpoints keep traffic on the AWS network.</p></div>
+        </div>
+        <div class="try an" style="--d:.3s">
+          <h4>Admin first steps</h4>
+          <div class="q">Connect your identity provider, then subscribe users or groups.</div>
+          <div class="q">Under Settings → Shared settings, set approved models and the MCP registry URL.</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="vis an" style="--d:.1s">
+          <h4>Example: MCP allow-list</h4>
+          <div class="steps">
+            <div class="step"><span class="n">1</span><div><b>Admin publishes a registry file</b><span>JSON list of approved servers, served over HTTPS (S3, nginx…), can be internal-only</span></div></div>
+            <div class="step"><span class="n">2</span><div><b>Kiro profile points at the URL</b><span>set at organization level, overridable per AWS account</span></div></div>
+            <div class="step"><span class="n">3</span><div><b>Clients sync at startup and every 24 h</b><span>registry versions and settings win; users add only their own keys and headers</span></div></div>
+            <div class="step warn"><span class="n">4</span><div><b>Anything else is stopped and hidden</b><span>if Kiro can't read the policy, MCP fails closed until it can</span></div></div>
+          </div>
+        </div>
+        <div class="avail an" style="--d:.2s">
+          <h4>Where it applies</h4>
+          <table>
+            <tr><th></th><th>IDE</th><th>CLI</th><th>Web</th><th>Mobile</th></tr>
+            <tr><td>MCP governance</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="u">?</td></tr>
+            <tr><td>Customer-managed KMS keys</td><td class="y">✓</td><td class="y">✓</td><td class="n">—</td><td class="u">?</td></tr>
+            <tr><td>Prompt logging to S3</td><td class="y">✓</td><td class="y">✓</td><td class="u">?</td><td class="u">?</td></tr>
+          </table>
+          <div class="legend">✓ applies · — documented as not applying · ? not documented</div>
+        </div>
+      </div>
+    </div>
+    <div class="note an" style="--d:.35s">
+      <div class="cav"><b style="color:#e9e3ff">Good to know:</b> MCP governance covers users who sign in with IAM Identity Center or API keys, not Builder ID or social sign-in. Some shared settings, including MCP configuration and customer-managed keys, don't apply to Kiro Web sessions.</div>
+      <div class="links"><span>Learn more</span><a href="https://kiro.dev/docs/enterprise/governance/" target="_blank" rel="noopener">Governance</a><a href="https://kiro.dev/docs/privacy-and-security/data-protection/" target="_blank" rel="noopener">Data protection</a><a href="https://kiro.dev/docs/privacy-and-security/vpc-endpoints/" target="_blank" rel="noopener">PrivateLink endpoints</a></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  // Scale the 1920x1080 stage to fit the window
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1920, innerHeight/1080);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  // ---------- page navigation: top links, arrows, number keys, swipe, card clicks ----------
+  const slides = [...document.querySelectorAll('.slide')];
+  const ids = slides.map(s => s.dataset.id);
+  const navLinks = [...document.querySelectorAll('#nav a')];
+  let cur = -1;
+
+  function go(i){
+    i = Math.max(0, Math.min(slides.length - 1, i));
+    if (i === cur) return;
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    navLinks.forEach((a, k) => a.classList.toggle('on', k === i));
+    cur = i;
+    const h = '#' + ids[i];
+    if (location.hash !== h) history.replaceState(null, '', h);
+  }
+  function fromHash(){
+    const k = ids.indexOf(location.hash.slice(1));
+    go(k < 0 ? 0 : k);
+  }
+  addEventListener('hashchange', fromHash);
+  navLinks.forEach((a, k) => a.addEventListener('click', e => { e.preventDefault(); go(k); }));
+  document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => go(ids.indexOf(el.dataset.go))));
+  document.getElementById('prev').addEventListener('click', () => go(cur - 1));
+  document.getElementById('next').addEventListener('click', () => go(cur + 1));
+
+  addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ') { e.preventDefault(); go(cur + 1); }
+    else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); go(cur - 1); }
+    else if (k === 'Home' || k === 'Escape') go(0);
+    else if (k === 'End') go(slides.length - 1);
+    else if (/^[1-8]$/.test(k)) go(+k - 1);
+    else if (k === 'f' || k === 'F') {
+      document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    }
+  });
+
+  let tx = null;
+  addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, {passive:true});
+  addEventListener('touchend', e => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx; tx = null;
+    if (Math.abs(dx) > 60) go(cur + (dx < 0 ? 1 : -1));
+  });
+
+  fromHash();
+
+  // Particles flowing both ways on every wire (Kiro <-> tool)
+  const NS = 'http://www.w3.org/2000/svg';
+  const wires = [['pA','#c4b5fd'],['pB','#7dd3fc'],['pC','#6ee7b7'],['pD','#fcd34d'],['pE','#f9a8d4'],['pF','#67e8f9'],['pG','#bae6fd']];
+  const layer = document.getElementById('particles');
+  wires.forEach(([id,color], i) => {
+    [false, true].forEach(reverse => {
+      const c = document.createElementNS(NS,'circle');
+      c.setAttribute('r', reverse ? '3.2' : '4.4');
+      c.setAttribute('fill', color);
+      c.setAttribute('class','particle');
+      c.setAttribute('style', `filter:drop-shadow(0 0 6px ${color})`);
+      const m = document.createElementNS(NS,'animateMotion');
+      m.setAttribute('dur', (2.6 + (i % 3) * 0.5) + 's');
+      m.setAttribute('begin', (i * 0.37 + (reverse ? 1.3 : 0)) + 's');
+      m.setAttribute('repeatCount','indefinite');
+      if (reverse) { m.setAttribute('keyPoints','1;0'); m.setAttribute('keyTimes','0;1'); m.setAttribute('calcMode','linear'); }
+      const mp = document.createElementNS(NS,'mpath');
+      mp.setAttribute('href', '#' + id);
+      m.appendChild(mp); c.appendChild(m); layer.appendChild(c);
+    });
+  });
+</script>
+</body>
+</html>
